@@ -108,29 +108,36 @@ func main() {
 	})
 	defer r.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120) // Increase the timeout
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*300)
+	// defer cancel()
+	// Kafka consumer loop
 	for {
-		m, err := r.ReadMessage(ctx)
-		if err != nil {
-			if err == context.DeadlineExceeded {
-				log.Println("Reading message timed out")
-				continue
-			} else {
-				log.Printf("Error reading message: %v\n", err)
-				return
+		// Set a context with timeout for each read operation
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*300) // Example: 5-second timeout
+		select {
+		case <-time.After(time.Millisecond * 100): // Check for message periodically
+			m, err := r.ReadMessage(ctx)
+			if err != nil {
+				if err == context.DeadlineExceeded {
+					fmt.Println("Context deadline exceeded while reading Kafka message")
+				} else {
+					fmt.Println("Error reading Kafka message:", err)
+				}
+				cancel()
+				break // Break the select, not the for loop
 			}
-		}
 
-		log.Println("Received message:", string(m.Value))
-		var infoData InfoData
-		if err := json.Unmarshal(m.Value, &infoData); err != nil {
-			log.Printf("Error unmarshalling message: %v\n", err)
-			continue
-		}
+			fmt.Println("Received message:", string(m.Value))
+			// Process the received message
+			// ... [rest of your message processing logic]
 
-		if err := insertOrUpdateProject(db, infoData); err != nil {
-			log.Printf("Error processing message: %v\n", err)
+			cancel() // Cancel the context after processing the message
+
+		case <-ctx.Done():
+			// Context was cancelled, possibly due to timeout
+			fmt.Println("Context canceled or deadline exceeded")
+			cancel()
+			continue // Continue to the next iteration of the loop
 		}
 	}
 }
