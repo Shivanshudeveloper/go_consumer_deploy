@@ -117,6 +117,7 @@ func main() {
 		select {
 		case <-time.After(time.Millisecond * 100): // Check for message periodically
 			m, err := r.ReadMessage(ctx)
+
 			if err != nil {
 				if err == context.DeadlineExceeded {
 					fmt.Println("Context deadline exceeded while reading Kafka message")
@@ -128,8 +129,14 @@ func main() {
 			}
 
 			fmt.Println("Received message:", string(m.Value))
+			batchMessages = append(batchMessages, string(m.Value)) // accumulate messages in the batch
+
+			if len(batchMessages) >= batchSize {
+				// Process the batch when it reaches the desired size
+				processBatch(db, batchMessages)
+				batchMessages = nil // reset the batch
+			}
 			// Process the received message
-			// ... [rest of your message processing logic]
 
 			cancel() // Cancel the context after processing the message
 
