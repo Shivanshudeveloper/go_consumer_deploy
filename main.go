@@ -39,7 +39,6 @@ type InfoData struct {
 	AppName            string    `json:"app_name"`
 	URL                string    `json:"url"`
 	PageTitle          string    `json:"page_title"`
-	Screenshot         string    `json:"screenshot"`
 	ProductivityStatus string    `json:"productivity_status"`
 	Meridian           string    `json:"meridian"`
 	IPAddress          string    `json:"ip_address"`
@@ -182,7 +181,6 @@ func createNewTable(db *sql.DB) error {
         app_name VARCHAR(255),
         url VARCHAR(255),
         page_title VARCHAR(255),
-        screenshot VARCHAR(255),
         productivity_status VARCHAR(255),
         meridian VARCHAR(255),
         ip_address VARCHAR(255),
@@ -206,7 +204,7 @@ func createNewTable(db *sql.DB) error {
 }
 
 func fetchData(db *sql.DB) {
-	rows, err := db.Query("SELECT * FROM system_info")
+	rows, err := db.Query("SELECT * FROM user_activity")
 	if err != nil {
 		panic(err)
 	}
@@ -226,19 +224,19 @@ func fetchData(db *sql.DB) {
 		panic(err)
 	}
 }
+
 func insertOrUpdateProject(db *sql.DB, data InfoData) error {
 	sqlStatement := `
-    INSERT INTO user_activity (activity_uuid, user_uid, organization_id, timestamp, app_name, url, page_title, screenshot, productivity_status, meridian, ip_address, mac_address, mouse_movement, mouse_clicks, keys_clicks, status, cpu_usage, ram_usage, screenshot_uid)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO user_activity (activity_uuid, user_uid, organization_id, timestamp, app_name, url, page_title, productivity_status, meridian, ip_address, mac_address, mouse_movement, mouse_clicks, keys_clicks, status, cpu_usage, ram_usage, screenshot_uid)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
-	_, err := db.Exec(sqlStatement, data.ActivityUUID, data.UserUID, data.OrganizationID, data.Timestamp, data.AppName, data.URL, data.PageTitle, data.Screenshot, data.ProductivityStatus, data.Meridian, data.IPAddress, data.MacAddress, data.MouseMovement, data.MouseClicks, data.KeysClicks, data.Status, data.CPUUsage, data.RAMUsage, data.ScreenshotUID)
+	_, err := db.Exec(sqlStatement, data.ActivityUUID, data.UserUID, data.OrganizationID, data.Timestamp, data.AppName, data.URL, data.PageTitle, data.ProductivityStatus, data.Meridian, data.IPAddress, data.MacAddress, data.MouseMovement, data.MouseClicks, data.KeysClicks, data.Status, data.CPUUsage, data.RAMUsage, data.ScreenshotUID)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Data inserted successfully.")
-	fetchData(db)
 	return nil
 }
 
