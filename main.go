@@ -7,16 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-
 	// "strings"
-	"os" // Import the os package
 	"time"
-
+	"os" // Import the os package
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq" // Import the PostgreSQL driver
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
+	"github.com/joho/godotenv"
 )
 
 var (
@@ -26,58 +24,60 @@ var (
 )
 var db *sql.DB
 
+
 type RequestBody struct {
 	Project string `json:"project"`
 	UserID  string `json:"userId"`
 }
 
 type InfoData struct {
-	ActivityUUID       string    `json:"activity_uuid"`
-	UserUID            string    `json:"user_uid"`
-	OrganizationID     string    `json:"organization_id"`
-	Timestamp          time.Time `json:"timestamp"`
-	AppName            string    `json:"app_name"`
-	URL                string    `json:"url"`
-	PageTitle          string    `json:"page_title"`
-	ProductivityStatus string    `json:"productivity_status"`
-	Meridian           string    `json:"meridian"`
-	IPAddress          string    `json:"ip_address"`
-	MacAddress         string    `json:"mac_address"`
-	MouseMovement      bool      `json:"mouse_movement"`
-	MouseClicks        int       `json:"mouse_clicks"`
-	KeysClicks         int       `json:"keys_clicks"`
-	Status             int       `json:"status"`
-	CPUUsage           string    `json:"cpu_usage"`
-	RAMUsage           string    `json:"ram_usage"`
-	ScreenshotUID      string    `json:"screenshot_uid"`
+    ActivityUUID       string `json:"activity_uuid"`
+    UserUID            string `json:"user_uid"`
+    OrganizationID     string `json:"organization_id"`
+    Timestamp          time.Time `json:"timestamp"`
+    AppName            string `json:"app_name"`
+    URL                string `json:"url"`
+    PageTitle          string `json:"page_title"`
+    ProductivityStatus string `json:"productivity_status"`
+    Meridian           string `json:"meridian"`
+    IPAddress          string `json:"ip_address"`
+    MacAddress         string `json:"mac_address"`
+    MouseMovement      bool `json:"mouse_movement"`
+    MouseClicks        int `json:"mouse_clicks"`
+    KeysClicks         int `json:"keys_clicks"`
+    Status             int `json:"status"`
+    CPUUsage           string `json:"cpu_usage"`
+    RAMUsage           string `json:"ram_usage"`
+    ScreenshotUID      string `json:"screenshot_uid"`
+    Device_user_name   string `json:"device_user_name"`
 }
 
 func main() {
 	// PostgreSQL connection string
 	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
+    if err != nil {
+        log.Fatalf("Error loading .env file: %v", err)
+    }
 	connStr := os.Getenv("POSTGRES_CONN_STR")
 
 	// connStr := "f7hiu7ql46m8ev2cpbp1:pscale_pw_5Hr2xQwvZQYg83n069wNs7dNAreLmYq302zM9rlRLSG@tcp(aws.connect.psdb.cloud)/tracktime?tls=true&interpolateParams=true"
 
-	// Establish a database connection
+    // Establish a database connection
 	fmt.Println(connStr)
 	// Connect to the PostgreSQL database
 	db, err := sql.Open("mysql", connStr)
-	if err != nil {
-		panic(err) // Print and exit on error
-	}
-	defer db.Close()
+    if err != nil {
+        panic(err) // Print and exit on error
+    }
+    defer db.Close()
 
-	// Check if the connection is successful
-	if err := db.Ping(); err != nil {
-		fmt.Println("Error connecting to the database:", err)
-		return
-	}
+    // Check if the connection is successful
+    if err := db.Ping(); err != nil {
+        fmt.Println("Error connecting to the database:", err)
+        return
+    }
 
-	fmt.Println("Connected to the database")
+    fmt.Println("Connected to the database")
 	// Check if we're connected
 	// err = db.Ping()
 	// if err != nil {
@@ -108,61 +108,62 @@ func main() {
 	defer r.Close()
 
 	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*300)
-	// defer cancel()
-	// Kafka consumer loop
-	for {
-		// Set a context with timeout for each read operation
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*300) // Example: 5-second timeout
-		select {
-		case <-time.After(time.Millisecond * 100): // Check for message periodically
-			m, err := r.ReadMessage(ctx)
+    // defer cancel()
+	 // Kafka consumer loop
+	 for {
+        // Set a context with timeout for each read operation
+        ctx, cancel := context.WithTimeout(context.Background(), time.Second*300) // Example: 5-second timeout
+        select {
+			case <-time.After(time.Millisecond * 100): // Check for message periodically
+            m, err := r.ReadMessage(ctx)
+            
+            if err != nil {
+                if err == context.DeadlineExceeded {
+                    fmt.Println("Context deadline exceeded while reading Kafka message")
+                } else {
+                    fmt.Println("Error reading Kafka message:", err)
+                }
+                cancel()
+                break // Break the select, not the for loop
+            }
 
-			if err != nil {
-				if err == context.DeadlineExceeded {
-					fmt.Println("Context deadline exceeded while reading Kafka message")
-				} else {
-					fmt.Println("Error reading Kafka message:", err)
-				}
-				cancel()
-				break // Break the select, not the for loop
-			}
+            fmt.Println("Received message:", string(m.Value))
+            batchMessages = append(batchMessages, string(m.Value)) // accumulate messages in the batch
 
-			fmt.Println("Received message:", string(m.Value))
-			batchMessages = append(batchMessages, string(m.Value)) // accumulate messages in the batch
+            if len(batchMessages) >= batchSize {
+                // Process the batch when it reaches the desired size
+                processBatch(db, batchMessages)
+                batchMessages = nil // reset the batch
+            }
+            // Process the received message
 
-			if len(batchMessages) >= batchSize {
-				// Process the batch when it reaches the desired size
-				processBatch(db, batchMessages)
-				batchMessages = nil // reset the batch
-			}
-			// Process the received message
+            cancel() // Cancel the context after processing the message
 
-			cancel() // Cancel the context after processing the message
-
-		case <-ctx.Done():
-			// Context was cancelled, possibly due to timeout
-			fmt.Println("Context canceled or deadline exceeded")
-			cancel()
-			continue // Continue to the next iteration of the loop
-		}
-	}
+        case <-ctx.Done():
+            // Context was cancelled, possibly due to timeout
+            fmt.Println("Context canceled or deadline exceeded")
+            cancel()
+            continue // Continue to the next iteration of the loop
+        }
+    }
 }
 
 func processBatch(db *sql.DB, messages []string) {
-	for _, message := range messages {
-		var infoData InfoData
-		if err := json.Unmarshal([]byte(message), &infoData); err != nil {
-			log.Printf("Error unmarshalling message: %v\n", err)
-			continue // Skip to the next message if there's an error
-		}
+    for _, message := range messages {
+        var infoData InfoData
+        if err := json.Unmarshal([]byte(message), &infoData); err != nil {
+            log.Printf("Error unmarshalling message: %v\n", err)
+            continue // Skip to the next message if there's an error
+        }
 
-		if err := insertOrUpdateProject(db, infoData); err != nil {
-			log.Printf("Error inserting/updating data: %v\n", err)
-			// Consider whether to continue or return/exit based on your error handling policy
-		}
+        if err := insertOrUpdateProject(db, infoData); err != nil {
+            log.Printf("Error inserting/updating data: %v\n", err)
+            // Consider whether to continue or return/exit based on your error handling policy
+        }
 		confirmDataAdded(db)
-	}
+    }
 }
+
 
 func createNewTable(db *sql.DB) error {
 	connStr := os.Getenv("MYSQL_CONN_STR")
@@ -172,7 +173,7 @@ func createNewTable(db *sql.DB) error {
 	}
 	defer db.Close()
 
-	createTableSQL := `
+    createTableSQL := `
     CREATE TABLE IF NOT EXISTS user_activity (
         activity_uuid VARCHAR(255) PRIMARY KEY,
         user_uid VARCHAR(255),
@@ -192,6 +193,7 @@ func createNewTable(db *sql.DB) error {
         cpu_usage VARCHAR(255),
         ram_usage VARCHAR(255),
         screenshot_uid VARCHAR(255)
+        device_user_name VARCHAR(50)
     );`
 
 	_, err = db.Exec(createTableSQL)
@@ -202,6 +204,7 @@ func createNewTable(db *sql.DB) error {
 	fmt.Println("Table 'user_activity' created successfully.")
 	return nil
 }
+
 
 func fetchData(db *sql.DB) {
 	rows, err := db.Query("SELECT * FROM user_activity")
@@ -226,27 +229,29 @@ func fetchData(db *sql.DB) {
 }
 
 func insertOrUpdateProject(db *sql.DB, data InfoData) error {
-	sqlStatement := `
-    INSERT INTO user_activity (activity_uuid, user_uid, organization_id, timestamp, app_name, url, page_title, productivity_status, meridian, ip_address, mac_address, mouse_movement, mouse_clicks, keys_clicks, status, cpu_usage, ram_usage, screenshot_uid)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    sqlStatement := `
+    INSERT INTO user_activity (activity_uuid, user_uid, organization_id, timestamp, app_name, url, page_title, productivity_status, meridian, ip_address, mac_address, mouse_movement, mouse_clicks, keys_clicks, status, cpu_usage, ram_usage, screenshot_uid, device_user_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
-	_, err := db.Exec(sqlStatement, data.ActivityUUID, data.UserUID, data.OrganizationID, data.Timestamp, data.AppName, data.URL, data.PageTitle, data.ProductivityStatus, data.Meridian, data.IPAddress, data.MacAddress, data.MouseMovement, data.MouseClicks, data.KeysClicks, data.Status, data.CPUUsage, data.RAMUsage, data.ScreenshotUID)
-	if err != nil {
-		return err
-	}
+    _, err := db.Exec(sqlStatement, data.ActivityUUID, data.UserUID, data.OrganizationID, data.Timestamp, data.AppName, data.URL, data.PageTitle, data.ProductivityStatus, data.Meridian, data.IPAddress, data.MacAddress, data.MouseMovement, data.MouseClicks, data.KeysClicks, data.Status, data.CPUUsage, data.RAMUsage, data.ScreenshotUID, data.Device_user_name)
+    if err != nil {
+        return err
+    }
 
-	fmt.Println("Data inserted successfully.")
-	return nil
+    fmt.Println("Data inserted successfully.")
+    return nil
 }
 
-func confirmDataAdded(db *sql.DB) {
-	query := "SELECT COUNT(*) FROM user_activity"
-	var count int
-	err := db.QueryRow(query).Scan(&count)
-	if err != nil {
-		log.Fatalf("Error querying the database: %v", err)
-	}
 
-	fmt.Printf("Number of records in user_activity table: %d\n", count)
+
+func confirmDataAdded(db *sql.DB) {
+    query := "SELECT COUNT(*) FROM user_activity"
+    var count int
+    err := db.QueryRow(query).Scan(&count)
+    if err != nil {
+        log.Fatalf("Error querying the database: %v", err)
+    }
+
+    fmt.Printf("Number of records in user_activity table: %d\n", count)
 }
