@@ -32,7 +32,7 @@ type RequestBody struct {
 
 type InfoData struct {
     ActivityUUID       string `json:"activity_uuid"`
-    UserUID            string `json:"user_uid"`
+    UserUID            string `json:"user_id"`
     OrganizationID     string `json:"organization_id"`
     Timestamp          time.Time `json:"timestamp"`
     AppName            string `json:"app_name"`
@@ -58,19 +58,27 @@ func main() {
     if err != nil {
         log.Fatalf("Error loading .env file: %v", err)
     }
-	connStr := os.Getenv("POSTGRES_CONN_STR")
+	// connStr := os.Getenv("POSTGRES_CONN_STR")
 
 	// connStr := "f7hiu7ql46m8ev2cpbp1:pscale_pw_5Hr2xQwvZQYg83n069wNs7dNAreLmYq302zM9rlRLSG@tcp(aws.connect.psdb.cloud)/tracktime?tls=true&interpolateParams=true"
 
     // Establish a database connection
-	fmt.Println(connStr)
+	// fmt.Println(connStr)
+    username := "root" // Default username for XAMPP MySQL is "root"
+    password := ""     // Default password for XAMPP MySQL is empty
+    database := "tracktime_db"
+    host := "tcp(localhost:3306)" // Default MySQL port for XAMPP is 3306
+
+    // Create the connection string
+    connectionString := fmt.Sprintf("%s:%s@%s/%s", username, password, host, database)
 	// Connect to the PostgreSQL database
-	db, err := sql.Open("mysql", connStr)
+	db, err := sql.Open("mysql", connectionString)
     if err != nil {
         panic(err) // Print and exit on error
     }
     defer db.Close()
 
+    
     // Check if the connection is successful
     if err := db.Ping(); err != nil {
         fmt.Println("Error connecting to the database:", err)
@@ -233,6 +241,8 @@ func insertOrUpdateProject(db *sql.DB, data InfoData) error {
     INSERT INTO user_activity (activity_uuid, user_uid, organization_id, timestamp, app_name, url, page_title, productivity_status, meridian, ip_address, mac_address, mouse_movement, mouse_clicks, keys_clicks, status, cpu_usage, ram_usage, screenshot_uid, device_user_name)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
+    fmt.Printf("user-id:", data.UserUID);
+    // search for user-id in the database
 
     _, err := db.Exec(sqlStatement, data.ActivityUUID, data.UserUID, data.OrganizationID, data.Timestamp, data.AppName, data.URL, data.PageTitle, data.ProductivityStatus, data.Meridian, data.IPAddress, data.MacAddress, data.MouseMovement, data.MouseClicks, data.KeysClicks, data.Status, data.CPUUsage, data.RAMUsage, data.ScreenshotUID, data.Device_user_name)
     if err != nil {
