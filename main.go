@@ -58,21 +58,21 @@ func main() {
     if err != nil {
         log.Fatalf("Error loading .env file: %v", err)
     }
-	// connStr := os.Getenv("POSTGRES_CONN_STR")
+	connStr := os.Getenv("POSTGRES_CONN_STR")
 
 	// connStr := "f7hiu7ql46m8ev2cpbp1:pscale_pw_5Hr2xQwvZQYg83n069wNs7dNAreLmYq302zM9rlRLSG@tcp(aws.connect.psdb.cloud)/tracktime?tls=true&interpolateParams=true"
 
     // Establish a database connection
 	// fmt.Println(connStr)
-    username := "root" // Default username for XAMPP MySQL is "root"
-    password := ""     // Default password for XAMPP MySQL is empty
-    database := "tracktime_db"
-    host := "tcp(localhost:3306)" // Default MySQL port for XAMPP is 3306
+    // username := "root" // Default username for XAMPP MySQL is "root"
+    // password := ""     // Default password for XAMPP MySQL is empty
+    // database := "tracktime_db"
+    // host := "tcp(localhost:3306)" // Default MySQL port for XAMPP is 3306
 
     // Create the connection string
-    connectionString := fmt.Sprintf("%s:%s@%s/%s", username, password, host, database)
+    // connectionString := fmt.Sprintf("%s:%s@%s/%s", username, password, host, database)
 	// Connect to the PostgreSQL database
-	db, err := sql.Open("mysql", connectionString)
+	db, err := sql.Open("mysql", connStr)
     if err != nil {
         panic(err) // Print and exit on error
     }
@@ -86,6 +86,11 @@ func main() {
     }
 
     fmt.Println("Connected to the database")
+
+    if err := ensureTableExists(db); err != nil {
+        log.Fatalf("Error ensuring table exists: %v", err)
+    }
+
 	// Check if we're connected
 	// err = db.Ping()
 	// if err != nil {
@@ -156,31 +161,28 @@ func main() {
     }
 }
 
-func processBatch(db *sql.DB, messages []string) {
-    for _, message := range messages {
-        var infoData InfoData
-        if err := json.Unmarshal([]byte(message), &infoData); err != nil {
-            log.Printf("Error unmarshalling message: %v\n", err)
-            continue // Skip to the next message if there's an error
-        }
 
-        if err := insertOrUpdateProject(db, infoData); err != nil {
-            log.Printf("Error inserting/updating data: %v\n", err)
-            // Consider whether to continue or return/exit based on your error handling policy
-        }
-		confirmDataAdded(db)
+func ensureTableExists(db *sql.DB) error {
+    exists, err := tableExists(db, "user_activity")
+    if err != nil {
+        return err
     }
+    if !exists {
+        return createNewTable(db)
+    }
+    return nil
 }
 
+func tableExists(db *sql.DB, tableName string) (bool, error) {
+    var count int
+    err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", tableName).Scan(&count)
+    if err != nil {
+        return false, err
+    }
+    return count > 0, nil
+}
 
 func createNewTable(db *sql.DB) error {
-	connStr := os.Getenv("MYSQL_CONN_STR")
-	db, err := sql.Open("mysql", connStr)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
     createTableSQL := `
     CREATE TABLE IF NOT EXISTS user_activity (
         activity_uuid VARCHAR(255) PRIMARY KEY,
@@ -200,18 +202,75 @@ func createNewTable(db *sql.DB) error {
         status INT,
         cpu_usage VARCHAR(255),
         ram_usage VARCHAR(255),
-        screenshot_uid VARCHAR(255)
+        screenshot_uid VARCHAR(255),
         device_user_name VARCHAR(50)
     );`
 
-	_, err = db.Exec(createTableSQL)
-	if err != nil {
-		return err
-	}
+    _, err := db.Exec(createTableSQL)
+    if err != nil {
+        return err
+    }
 
-	fmt.Println("Table 'user_activity' created successfully.")
-	return nil
+    fmt.Println("Table 'user_activity' created successfully.")
+    return nil
 }
+
+func processBatch(db *sql.DB, messages []string) {
+    for _, message := range messages {
+        var infoData InfoData
+        if err := json.Unmarshal([]byte(message), &infoData); err != nil {
+            log.Printf("Error unmarshalling message: %v\n", err)
+            continue // Skip to the next message if there's an error
+        }
+
+        if err := insertOrUpdateProject(db, infoData); err != nil {
+            log.Printf("Error inserting/updating data: %v\n", err)
+            // Consider whether to continue or return/exit based on your error handling policy
+        }
+		confirmDataAdded(db)
+    }
+}
+
+
+// func createNewTable(db *sql.DB) error {
+// 	connStr := os.Getenv("MYSQL_CONN_STR")
+// 	db, err := sql.Open("mysql", connStr)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer db.Close()
+
+//     createTableSQL := `
+//     CREATE TABLE IF NOT EXISTS user_activity (
+//         activity_uuid VARCHAR(255) PRIMARY KEY,
+//         user_uid VARCHAR(255),
+//         organization_id VARCHAR(255),
+//         timestamp DATETIME,
+//         app_name VARCHAR(255),
+//         url VARCHAR(255),
+//         page_title VARCHAR(255),
+//         productivity_status VARCHAR(255),
+//         meridian VARCHAR(255),
+//         ip_address VARCHAR(255),
+//         mac_address VARCHAR(255),
+//         mouse_movement BOOLEAN,
+//         mouse_clicks INT,
+//         keys_clicks INT,
+//         status INT,
+//         cpu_usage VARCHAR(255),
+//         ram_usage VARCHAR(255),
+//         screenshot_uid VARCHAR(255)
+//         device_user_name VARCHAR(50)
+//     );`
+
+// 	_, err = db.Exec(createTableSQL)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	fmt.Println("Table 'user_activity' created successfully.")
+// 	return nil
+// }
 
 
 func fetchData(db *sql.DB) {
