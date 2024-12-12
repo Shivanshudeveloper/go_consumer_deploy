@@ -99,8 +99,10 @@ func main() {
 	// defer db.Close()
 
 	// Kafka settings
-    userName := "trackTIme-2"
-    password := "9g72zV0EcLbA50v6jnnmfiFRvwqUKZ"
+    // userName := "trackTIme-2" os.Getenv("KAFKA_USER_NAME");
+    // password := "9g72zV0EcLbA50v6jnnmfiFRvwqUKZ" os.Getenv("KAFKA_PASSWORD");
+    userName := os.Getenv("KAFKA_USER_NAME");
+    password := os.Getenv("KAFKA_PASSWORD");
 	mechanism, err := scram.Mechanism(scram.SHA256, userName, password)
 	if err != nil {
 		log.Fatalln(err)
@@ -111,11 +113,12 @@ func main() {
 		TLS:           &tls.Config{},
 	}
 
-	topic := "tracktime" // Replace with your topic name
+	// topic := "tracktime" // Replace with your topic name
+    topic := os.Getenv("TOPIC")
 	// partition := 0
 
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"csotv8fp02kgs1f19irg.any.eu-central-1.mpx.prd.cloud.redpanda.com:9092"}, // Replace with your Upstash Kafka broker endpoint
+		Brokers: []string{os.Getenv("KAFKA_BROKER")}, // Replace with your Upstash Kafka broker endpoint
 		// GroupID: "test_kafka",
 		Topic:   topic,
 		Dialer:  dialer,
